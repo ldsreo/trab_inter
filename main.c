@@ -13,7 +13,7 @@ void configurar(int *pjanela_x, int *pbolha, float *pdl, int *pnum_linha_0, int 
 void salvar(int pts);
 void nova_janela(int *janela_x, int *size_x, int bolha, int num_linha_0, float dl);
 void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, int *campo_00);
-void desenhar_hud(int *size_x, int bolha, float dl, int *random);
+void desenhar_hud(int *size_x, int bolha, float dl, int *random_prox);
 void desenhar_menu(int *size_x, int bolha, int pts);
 
 SDL_Window* g_pWindow = 0;
@@ -21,13 +21,13 @@ SDL_Renderer* g_pRenderer = 0;
 
 int main(void)
 {
-	int janela[2];		/* dimensoes da janela (x,y) em bolhas 					*/
-	int bolha;		/* dimensao da bolha (d) 							*/
-	float dl;			/* espaco para colisao, em % de 'd'	 				*/
-	int num_linha_0;	/* numero inicial de linhas 							*/
-	int nova_linha;	/* criar nova linha a cada 'n' rodadas 					*/
-	int size[5];		/* window size {x, y, campo_y, offset_top, offset_bottom}*/
-	int random_color = rand() % 9;
+	int janela[2];						/* dimensoes da janela (x,y) em bolhas 					*/
+	int bolha;						/* dimensao da bolha (d) 							*/
+	float dl;							/* espaco para colisao, em % de 'd'	 				*/
+	int num_linha_0;					/* numero inicial de linhas 							*/
+	int nova_linha;					/* criar nova linha a cada 'n' rodadas 					*/
+	int size[5];						/* window size {x, y, campo_y, offset_top, offset_bottom}*/
+	int random_color[2] = {rand() % 9, 0};	/* atual, proxima */
 	int pontuacao = 0;
 	
 	// LER CONFIG.TXT
@@ -42,7 +42,7 @@ int main(void)
 printf("1\n");
 	desenhar_campo(janela[0], bolha, dl, num_linha_0, &campo_bolha[0][0]);
 printf("2\n");
-	desenhar_hud(&size[0], bolha, dl, &random_color);
+	desenhar_hud(&size[0], bolha, dl, &random_color[1]);
 printf("3\n");
 	desenhar_menu(&size[0], bolha, pontuacao);
 	// Rodar jogo
@@ -171,7 +171,7 @@ void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, int *cam
  	SDL_RenderPresent(g_pRenderer);
 }
 
-void desenhar_hud(int *size_x, int bolha, float dl, int *random)
+void desenhar_hud(int *size_x, int bolha, float dl, int *random_prox)
 {
 	int x, y, s;
 	int color[9][3] =  {{255, 0, 0},		/* vermelho */
@@ -185,20 +185,21 @@ void desenhar_hud(int *size_x, int bolha, float dl, int *random)
 					{255, 255, 255}};	/* branco */
 
 	// current bolha
-	x = *(size_x) / 2;						/* size_x / 2 		*/
-	y = *(size_x+1) - (0.5 * bolha * (1 + dl));	/* size_y - bolha/2 */
-	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[*random][0], color[*random][1], color[*random][2], 255);
+//	x = *(size_x) / 2;						/* size_x / 2 		*/
+//	y = *(size_x+1) - (0.5 * bolha * (1 + dl));	/* size_y - bolha/2 */
+//	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[*random][0], color[*random][1], color[*random][2], 255);
 
 	// rect
 	s = bolha * (1 + dl) + 1;
 	x = 0;
 	y = *(size_x+1) - s;	/* size_y - side */
 	rectangleRGBA(g_pRenderer, x, y, x+s, y+s, 0, 0, 0, 255);
+
 	// prox bolha
-	*random = rand() % 9;					/* definir novo random */
+	*random_prox = rand() % 9;					/* definir novo random */
 	x = 0.5 * bolha * (1 + dl);
-	y = *(size_x+1) - (0.5 * bolha * (1 + dl));	/* size_y - bolha/2 */
-	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[*random][0], color[*random][1], color[*random][2], 255);
+	y = *(size_x+1) - (0.5 * bolha * (1 + dl));		/* size_y - bolha/2 */
+	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[*random_prox][0], color[*random_prox][1], color[*random_prox][2], 255);
 
 	// show the window
  	SDL_RenderPresent(g_pRenderer);
@@ -212,6 +213,7 @@ void desenhar_menu(int *size_x, int bolha, int pts)
 	for (int i = 1; pow(10,i+1) < pts; i++) {
 		pontos[13-i] = pts % (int)pow(10,i);
 	}
+	gfxPrimitivesSetFontRotation(0);
 	// caixa_novo
 	x = 5;
 	y = 5;
@@ -227,25 +229,28 @@ void desenhar_menu(int *size_x, int bolha, int pts)
 	// texto_novo
 	x = 10;
 	y = 10;
-	gfxPrimitivesSetFontRotation(0);
  	stringRGBA(g_pRenderer, x, y, "Novo Jogo", 0, 0, 0, 255);
 
 	// texto_fim
 	x = 95;
-	gfxPrimitivesSetFontRotation(0);
  	stringRGBA(g_pRenderer, x, y, "Fim", 0, 0, 0, 255);
 
 	// caixa_pts
-	x = 5;
-	y = 25;
+	if (*size_x < 255) {	/* pos. = embaixo */
+		x = 5;
+		y = 25;
+	}
+	else {					/* pos. = ao lado */
+		x = *size_x - 125;
+		y = 5;
+	}	
 	w = 120;
 	h = 15;
 	rectangleRGBA(g_pRenderer, x, y, x+w, y+h, 50, 50, 50, 255);
 
 	// texto_pts
-	x = 10;
-	y = 30;
-	gfxPrimitivesSetFontRotation(0);
+	x += 5;
+	y += 5;
  	stringRGBA(g_pRenderer, x, y, pontos, 0, 0, 0, 255);
 
 	// show the window
