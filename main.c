@@ -12,42 +12,38 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL2_gfxPrimitives.h>
 
-void configurar(int *pjanela_x, int *pbolha, float *pdl, int *pnum_linha_0, int *pnova_linha);
+void configurar(int configs[6], float *pdl);
 void salvar(int pts);
-void nova_janela(int janela[2], int size[5], int bolha, int num_linha_0, float dl);
-void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char *campo);
+void nova_janela(int configs[6], int size[5], float dl);
+void desenhar_campo(int configs[6], float dl, int offset_top, char *campo);
 void desenhar_hud(int *size_x, int bolha, float dl, int *random_prox);
 void desenhar_menu(int size[5], int bolha, int pts);
-void atirar_bolha(int size[5], int bolha, int campo);
+void atirar_bolha(int size[5], int bolha, int random);
 
 SDL_Window* g_pWindow = 0;
 SDL_Renderer* g_pRenderer = 0;
 
 int main(void)
 {
-	int janela[2];						/* dimensoes da janela (x,y) em bolhas 					*/
-	int bolha;						/* dimensao da bolha (d) 							*/
-	float dl;							/* espaco para colisao, em % de 'd'	 				*/
-	int num_linha_0;					/* numero inicial de linhas 							*/
-	int nova_linha;					/* criar nova linha a cada 'n' rodadas 					*/
+	int configs[6];	
 	int size[5];						/* window size {x, y, campo_y, offset_top, offset_bottom}*/
 	int random_color[2] = {rand() % 9, 0};	/* atual, proxima */
 	int pontuacao = 0;
 
 	// LER CONFIG.TXT
-	configurar(&janela[0], &bolha, &dl, &num_linha_0, &nova_linha);
+	configurar(configs, &dl);
 
 	// CRIAR JANELA C/ SDL
-	nova_janela(&janela[0], &size[0], bolha, num_linha_0, dl);
+	nova_janela(configs, &size[0], dl);
 
 	char campo_bolha[size[0]][size[2]];	/* usar 'char' p/ ocupar menos memoria */
-	for (int i = 0; i < janela[0]*janela[1]; i++) {
+	for (int i = 0; i < configs[0]*configs[1]; i++) {
 		*(&campo_bolha[0][0] + i) = -1;
 	}
 
-	desenhar_campo(janela[0], bolha, dl, num_linha_0, &campo_bolha[0][0]);
-	desenhar_hud(&size[0], bolha, dl, &random_color[1]);
-	desenhar_menu(&size[0], bolha, pontuacao);
+	desenhar_campo(configs, dl, size[3], &campo_bolha[0][0]);
+	desenhar_hud(&size[0], configs[2], dl, &random_color[1]);
+	desenhar_menu(&size[0], configs[2], pontuacao);
 
 	// Rodar jogo
 
@@ -61,13 +57,17 @@ int main(void)
 	return 0;
 }
 
-void configurar(int *pjanela_x, int *pbolha, float *pdl, int *pnum_linha_0, int *pnova_linha)
+void configurar(int configs[6], float *pdl)
 {
-	char ch;
-	char linha[100];
-	void *pointers[6] = {pjanela_x, pjanela_x+1, pbolha, pdl, pnum_linha_0, pnova_linha};	
-	int i = 0;
+	/* dimensao x da janela em bolhas 		*/
+	/* dimensao y da janela em bolhas 		*/
+	/* diametro da bolha	 			*/
+	/* NULL							*/
+	/* numero inicial de linhas 			*/
+	/* criar nova linha a cada 'n' rodadas	*/
 
+	char ch, linha[100];	
+	int i = 0;
 	FILE *file_in = fopen("config.txt","r");
 
 	if (file_in == NULL) {
@@ -76,23 +76,23 @@ void configurar(int *pjanela_x, int *pbolha, float *pdl, int *pnum_linha_0, int 
 		return;
 	}
 
-	ch = fgetc(file_in);
-	while (ch != EOF) {
+	do {
+		ch = fgetc(file_in);
 		if (ch != '\n') {
 			if ((ch > 47) && (ch < 58)) {
 				ungetc(ch, file_in);
 				if (i == 3)
-					fscanf(file_in, "%f", pointers[i]);
+					fscanf(file_in, "%f", pdl);
 				else
-					fscanf(file_in, "%d", pointers[i]);
+					fscanf(file_in, "%d", &configs[i]);
 				i++;
 			}
 			else if (ch != ' ') {
 				fgets(linha, 100, file_in);
 			}
 		}
-		ch = fgetc(file_in);
-	}
+	} while (ch != EOF)
+
 	*pdl *= 0.01;
 	fclose(file_in);
 
@@ -113,19 +113,21 @@ void salvar(int pts)
 	return;
 }
 
-void nova_janela(int janela[2], int size[5], int bolha, int num_linha_0, float dl)
+void nova_janela(int configs[6], int size[5], float dl)
 {
-	size[4] = 2 * bolha * (1+dl);					/* offset_bottom */ 
-	size[3] = 50;								/* offset_top	*/
-	size[2] = (janela[1] + 2) * bolha * (1 + dl);	/* campo_y	*/
-	size[1] = size[2] + size[3] + size[4]; 			/* y			*/
-	size[0] = janela[0] * bolha * (1 + dl);			/* x			*/
+	size[0] = configs[0] * configs[2] * (1 + dl);		/* x			*/
+	size[4] = 2 * configs[2] * (1+dl);					/* offset_bottom */ 
+	if (size[0] < 255)								/* offset_top	*/
+		size[3] = 45;
+	else
+		size[3] = 25;
+	size[2] = (configs[1] + 2) * configs[2] * (1 + dl);	/* campo_y	*/
+	size[1] = size[2] + size[3] + size[4]; 				/* y			*/
 	
 	// initialize SDL
 	if(SDL_Init(SDL_INIT_EVERYTHING) >= 0) {
 		// if succeeded create our window
-		g_pWindow = SDL_CreateWindow("Trabalho Intermedio",
-		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, size[0], size[1], SDL_WINDOW_SHOWN);
+		g_pWindow = SDL_CreateWindow("Trabalho Intermedio", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, size[0], size[1], SDL_WINDOW_SHOWN);
 
 		// if the window creation succeeded create our renderer
 		if(g_pWindow != 0) {
@@ -148,9 +150,9 @@ void nova_janela(int janela[2], int size[5], int bolha, int num_linha_0, float d
  	return;
 }
 
-void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char *campo)
+void desenhar_campo(int configs[6], float dl, int offset_top, char *campo)
 {
-	int x, y, r = 0.5 * bolha * dl;
+	int x, y, r = 0.5 * configs[2] * dl;
 	int color[9][3] =  {{255, 0, 0},		/* vermelho */
 					{128, 0, 128},		/* roxo */
 					{0, 0, 255},		/* azul */
@@ -162,12 +164,12 @@ void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char *ca
 					{255, 255, 255}};	/* branco */
 	int random;
 
-	for (int i = 0; i < janela_x; i++) {
-		for (int j = 0; j < num_linha_0; j++) {
-			x = (i + 0.5) * bolha * (1 + dl);
-			y = (j + 0.5) * bolha * (1 + dl);
+	for (int i = 0; i < configs[0]; i++) {
+		for (int j = 0; j < configs[4]; j++) {
+			x = (i + 0.5) * configs[2] * (1 + dl);
+			y = (j + 0.5) * configs[2] * (1 + dl) + offset_top;
 			random = rand() % 9;
-			filledCircleRGBA(g_pRenderer, x, y+50, bolha/2, color[random][0], color[random][1], color[random][2], 255);
+			filledCircleRGBA(g_pRenderer, x, y, configs[2]/2, color[random][0], color[random][1], color[random][2], 255);
 			for (int dx = -r; dx <= r; dx++) {
 				for (int dy = -r; dy <= r; dy++) {
 					if ((pow(dx,2) + pow(dy,2)) <= pow(r,2))	/* se dentro da bolha */
@@ -262,7 +264,7 @@ void desenhar_menu(int *size_x, int bolha, int pts)
 	return;
 }
 
-void atirar_bolha(int size[5], int bolha, int campo, int random)
+void atirar_bolha(int size[5], int bolha, int random)
 {
 	int x, y;
 	int color[9][3] =  {{255, 0, 0},		/* vermelho */
