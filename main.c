@@ -14,11 +14,11 @@
 
 void configurar(int *pjanela_x, int *pbolha, float *pdl, int *pnum_linha_0, int *pnova_linha);
 void salvar(int pts);
-void nova_janela(int *janela_x, int *size_x, int bolha, int num_linha_0, float dl);
+void nova_janela(int janela[2], int size[5], int bolha, int num_linha_0, float dl);
 void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char *campo);
 void desenhar_hud(int *size_x, int bolha, float dl, int *random_prox);
-void desenhar_menu(int *size_x, int bolha, int pts);
-void atirar_bolha(int size[], int bolha, int campo);
+void desenhar_menu(int size[5], int bolha, int pts);
+void atirar_bolha(int size[5], int bolha, int campo);
 
 SDL_Window* g_pWindow = 0;
 SDL_Renderer* g_pRenderer = 0;
@@ -65,7 +65,7 @@ void configurar(int *pjanela_x, int *pbolha, float *pdl, int *pnum_linha_0, int 
 {
 	char ch;
 	char linha[100];
-	void *pointers[6] = {pjanela_x, pjanela_x + 1, pbolha, pdl, pnum_linha_0, pnova_linha};	
+	void *pointers[6] = {pjanela_x, pjanela_x+1, pbolha, pdl, pnum_linha_0, pnova_linha};	
 	int i = 0;
 
 	FILE *file_in = fopen("config.txt","r");
@@ -113,19 +113,19 @@ void salvar(int pts)
 	return;
 }
 
-void nova_janela(int *janela_x, int *size_x, int bolha, int num_linha_0, float dl)
+void nova_janela(int janela[2], int size[5], int bolha, int num_linha_0, float dl)
 {
-	*(size_x+4) = 2 * bolha * (1+dl);					/* offset_bottom */ 
-	*(size_x+3) = 50;								/* offset_top	*/
-	*(size_x+2) = (*(janela_x+1) + 2) * bolha * (1 + dl);	/* campo_y	*/
-	*(size_x+1) = *(size_x+2) + *(size_x+3) + *(size_x+4); /* y			*/
-	*size_x = *janela_x * bolha * (1 + dl);				/* x			*/
+	size[4] = 2 * bolha * (1+dl);					/* offset_bottom */ 
+	size[3] = 50;								/* offset_top	*/
+	size[2] = (janela[1] + 2) * bolha * (1 + dl);	/* campo_y	*/
+	size[1] = size[2] + size[3] + size[4]; 			/* y			*/
+	size[0] = janela[0] * bolha * (1 + dl);			/* x			*/
 	
 	// initialize SDL
 	if(SDL_Init(SDL_INIT_EVERYTHING) >= 0) {
 		// if succeeded create our window
 		g_pWindow = SDL_CreateWindow("Trabalho Intermedio",
-		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, *size_x, *(size_x+1), SDL_WINDOW_SHOWN);
+		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, size[0], size[1], SDL_WINDOW_SHOWN);
 
 		// if the window creation succeeded create our renderer
 		if(g_pWindow != 0) {
@@ -180,7 +180,7 @@ void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char *ca
  	SDL_RenderPresent(g_pRenderer);
 }
 
-void desenhar_hud(int *size_x, int bolha, float dl, int *random_prox)
+void desenhar_hud(int *size_y, int bolha, float dl, int *random_prox)
 {
 	int x, y, s;
 	int color[9][3] =  {{255, 0, 0},		/* vermelho */
@@ -193,21 +193,16 @@ void desenhar_hud(int *size_x, int bolha, float dl, int *random_prox)
 					{0, 0, 0},		/* preto */
 					{255, 255, 255}};	/* branco */
 
-	// current bolha
-//	x = *(size_x) / 2;						/* size_x / 2 		*/
-//	y = *(size_x+1) - (0.5 * bolha * (1 + dl));	/* size_y - bolha/2 */
-//	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[*random][0], color[*random][1], color[*random][2], 255);
-
 	// rect
 	s = bolha * (1 + dl) + 1;
 	x = 0;
-	y = *(size_x+1) - s;	/* size_y - side */
+	y = *size_y - s;	/* size_y - side */
 	rectangleRGBA(g_pRenderer, x, y, x+s, y+s, 0, 0, 0, 255);
 
 	// prox bolha
 	*random_prox = rand() % 9;					/* definir novo random */
 	x = 0.5 * bolha * (1 + dl);
-	y = *(size_x+1) - (0.5 * bolha * (1 + dl));		/* size_y - bolha/2 */
+	y = *size_y - (0.5 * bolha * (1 + dl));		/* size_y - bolha/2 */
 	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[*random_prox][0], color[*random_prox][1], color[*random_prox][2], 255);
 
 	// show the window
@@ -267,7 +262,23 @@ void desenhar_menu(int *size_x, int bolha, int pts)
 	return;
 }
 
-void atirar_bolha(int size[], int bolha, int campo)
+void atirar_bolha(int size[5], int bolha, int campo, int random)
 {
+	int x, y;
+	int color[9][3] =  {{255, 0, 0},		/* vermelho */
+					{128, 0, 128},		/* roxo */
+					{0, 0, 255},		/* azul */
+					{0, 255, 255},		/* cyan */
+					{0, 128, 0},		/* verde */
+					{255, 255, 0},		/* amarelo */
+					{128, 0, 0},		/* castanho */
+					{0, 0, 0},		/* preto */
+					{255, 255, 255}};	/* branco */
+
+	// current bolha
+	x = size[0]) / 2;						/* size_x / 2 		*/
+	y = size[1] - (0.5 * bolha * (1 + dl));		/* size_y - bolha/2 */
+	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[random][0], color[random][1], color[random][2], 255);
+	
 	return;
 }
