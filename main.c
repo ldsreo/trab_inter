@@ -1,5 +1,8 @@
 // TRABALHO INTERMEDIO
 //
+// 89190 Leonardo da Silva Rosa e Oliveira
+//
+//
 // Compile with:
 // gcc main.c -g -I/usr/include/SDL2 -D_REENTRANT -Wall -pedantic -std=c99 -L/usr/lib/i386-linux-gnu -lm -lSDL2 -lSDL2_gfx -o inter
 
@@ -12,9 +15,10 @@
 void configurar(int *pjanela_x, int *pbolha, float *pdl, int *pnum_linha_0, int *pnova_linha);
 void salvar(int pts);
 void nova_janela(int *janela_x, int *size_x, int bolha, int num_linha_0, float dl);
-void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, int *campo_00);
+void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char campo[302][201]);
 void desenhar_hud(int *size_x, int bolha, float dl, int *random_prox);
 void desenhar_menu(int *size_x, int bolha, int pts);
+void atirar_bolha(int size[], int bolha, int campo);
 
 SDL_Window* g_pWindow = 0;
 SDL_Renderer* g_pRenderer = 0;
@@ -29,22 +33,22 @@ int main(void)
 	int size[5];						/* window size {x, y, campo_y, offset_top, offset_bottom}*/
 	int random_color[2] = {rand() % 9, 0};	/* atual, proxima */
 	int pontuacao = 0;
-	
+
 	// LER CONFIG.TXT
 	configurar(&janela[0], &bolha, &dl, &num_linha_0, &nova_linha);
-	int campo_bolha[janela[0]][janela[1]];
+
+	// CRIAR JANELA C/ SDL
+	nova_janela(&janela[0], &size[0], bolha, num_linha_0, dl);
+
+	char campo_bolha[size[0]][size[2]];	/* usar 'char' p/ ocupar menos memoria */
 	for (int i = 0; i < janela[0]*janela[1]; i++) {
 		*(&campo_bolha[0][0] + i) = -1;
 	}
 
-	// CRIAR JANELA C/ SDL
-	nova_janela(&janela[0], &size[0], bolha, num_linha_0, dl);
-printf("1\n");
-	desenhar_campo(janela[0], bolha, dl, num_linha_0, &campo_bolha[0][0]);
-printf("2\n");
+	desenhar_campo(janela[0], bolha, dl, num_linha_0, campo_bolha);
 	desenhar_hud(&size[0], bolha, dl, &random_color[1]);
-printf("3\n");
 	desenhar_menu(&size[0], bolha, pontuacao);
+
 	// Rodar jogo
 
 	// Fim de jogo
@@ -144,9 +148,9 @@ void nova_janela(int *janela_x, int *size_x, int bolha, int num_linha_0, float d
  	return;
 }
 
-void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, int *campo_00)
+void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char campo[302][201])
 {
-	int x, y;
+	int x, y, r = 0.5 * bolha * dl;
 	int color[9][3] =  {{255, 0, 0},		/* vermelho */
 					{128, 0, 128},		/* roxo */
 					{0, 0, 255},		/* azul */
@@ -164,7 +168,12 @@ void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, int *cam
 			y = (j + 0.5) * bolha * (1 + dl);
 			random = rand() % 9;
 			filledCircleRGBA(g_pRenderer, x, y+50, bolha/2, color[random][0], color[random][1], color[random][2], 255);
-			*(campo_00 + i*j) = random;
+			for (int dx = -r; dx <= r; dx++) {
+				for (int dy = -r; dy <= r; dy++) {
+					if ((pow(dx,2) + pow(dy,2)) <= pow(r,2))	/* se dentro da bolha */
+						campo[i+dx][j+dy] = random;			/* definir cor no campo */
+				}
+			}
 		}
 	}
 	// show the window
