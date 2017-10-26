@@ -15,7 +15,7 @@
 void configurar(int *pjanela_x, int *pbolha, float *pdl, int *pnum_linha_0, int *pnova_linha);
 void salvar(int pts);
 void nova_janela(int *janela_x, int *size_x, int bolha, int num_linha_0, float dl);
-void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char campo[302][201]);
+void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char *campo);
 void desenhar_hud(int *size_x, int bolha, float dl, int *random_prox);
 void desenhar_menu(int *size_x, int bolha, int pts);
 void atirar_bolha(int size[], int bolha, int campo);
@@ -45,7 +45,7 @@ int main(void)
 		*(&campo_bolha[0][0] + i) = -1;
 	}
 
-	desenhar_campo(janela[0], bolha, dl, num_linha_0, campo_bolha);
+	desenhar_campo(janela[0], bolha, dl, num_linha_0, &campo_bolha[0][0]);
 	desenhar_hud(&size[0], bolha, dl, &random_color[1]);
 	desenhar_menu(&size[0], bolha, pontuacao);
 
@@ -148,7 +148,7 @@ void nova_janela(int *janela_x, int *size_x, int bolha, int num_linha_0, float d
  	return;
 }
 
-void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char campo[302][201])
+void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char *campo)
 {
 	int x, y, r = 0.5 * bolha * dl;
 	int color[9][3] =  {{255, 0, 0},		/* vermelho */
@@ -171,7 +171,7 @@ void desenhar_campo(int janela_x, int bolha, float dl, int num_linha_0, char cam
 			for (int dx = -r; dx <= r; dx++) {
 				for (int dy = -r; dy <= r; dy++) {
 					if ((pow(dx,2) + pow(dy,2)) <= pow(r,2))	/* se dentro da bolha */
-						campo[i+dx][j+dy] = random;			/* definir cor no campo */
+						*(campo + (x+dx) + (y+dy)) = random;	/* definir cor no campo */
 				}
 			}
 		}
@@ -264,5 +264,10 @@ void desenhar_menu(int *size_x, int bolha, int pts)
 
 	// show the window
  	SDL_RenderPresent(g_pRenderer);
+	return;
+}
+
+void atirar_bolha(int size[], int bolha, int campo)
+{
 	return;
 }
