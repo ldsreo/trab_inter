@@ -16,19 +16,20 @@ void configurar(int configs[6], float *pdl);
 void salvar(int pts);
 void nova_janela(int configs[6], int size[5], float dl);
 void desenhar_campo(int configs[6], float dl, int offset_top, char *campo);
-void desenhar_hud(int *size_x, int bolha, float dl, int *random_prox);
+void desenhar_hud(int size[2], int bolha, float dl, int random[2]);
 void desenhar_menu(int size[5], int bolha, int pts);
-void atirar_bolha(int size[5], int bolha, int random);
+void atirar_bolha(int size[5], int bolha, float dl, int random, float *angle);
 
 SDL_Window* g_pWindow = 0;
 SDL_Renderer* g_pRenderer = 0;
 
 int main(void)
 {
-	int configs[6];	
+	int configs[6];
+	float dl, angle;
 	int size[5];						/* window size {x, y, campo_y, offset_top, offset_bottom}*/
-	int random_color[2] = {rand() % 9, 0};	/* atual, proxima */
-	int pontuacao = 0;
+	int random_color[2] = {rand() % 9, rand() % 9};	/* atual, proxima */
+	int fim = 0, pontuacao = 0;
 
 	// LER CONFIG.TXT
 	configurar(configs, &dl);
@@ -45,7 +46,11 @@ int main(void)
 	desenhar_hud(&size[0], configs[2], dl, &random_color[1]);
 	desenhar_menu(&size[0], configs[2], pontuacao);
 
-	// Rodar jogo
+	// RODAR JOGO
+	while (fim != 1) {
+		atirar_bolha(size, configs[2], dl, random_color[0], &angle);
+		fim = 1;
+	}
 
 	// Fim de jogo
 
@@ -91,7 +96,7 @@ void configurar(int configs[6], float *pdl)
 				fgets(linha, 100, file_in);
 			}
 		}
-	} while (ch != EOF)
+	} while (ch != EOF);
 
 	*pdl *= 0.01;
 	fclose(file_in);
@@ -182,7 +187,7 @@ void desenhar_campo(int configs[6], float dl, int offset_top, char *campo)
  	SDL_RenderPresent(g_pRenderer);
 }
 
-void desenhar_hud(int *size_y, int bolha, float dl, int *random_prox)
+void desenhar_hud(int size[2], int bolha, float dl, int random[2])
 {
 	int x, y, s;
 	int color[9][3] =  {{255, 0, 0},		/* vermelho */
@@ -198,14 +203,18 @@ void desenhar_hud(int *size_y, int bolha, float dl, int *random_prox)
 	// rect
 	s = bolha * (1 + dl) + 1;
 	x = 0;
-	y = *size_y - s;	/* size_y - side */
+	y = size[1] - s;	/* size_y - side */
 	rectangleRGBA(g_pRenderer, x, y, x+s, y+s, 0, 0, 0, 255);
 
 	// prox bolha
-	*random_prox = rand() % 9;					/* definir novo random */
 	x = 0.5 * bolha * (1 + dl);
-	y = *size_y - (0.5 * bolha * (1 + dl));		/* size_y - bolha/2 */
-	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[*random_prox][0], color[*random_prox][1], color[*random_prox][2], 255);
+	y = size[1] - (0.5 * bolha * (1 + dl));		/* size_y - bolha/2 */
+	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[random[1]][0], color[random[1]][1], color[random[1]][2], 255);
+
+	// current bolha
+	x = size[0] / 2;						/* size_x / 2 		*/
+	y = size[1] - (0.5 * bolha * (1 + dl));		/* size_y - bolha/2 */
+	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[random[0]][0], color[random[0]][1], color[random[0]][2], 255);
 
 	// show the window
  	SDL_RenderPresent(g_pRenderer);
@@ -264,9 +273,12 @@ void desenhar_menu(int *size_x, int bolha, int pts)
 	return;
 }
 
-void atirar_bolha(int size[5], int bolha, int random)
+void atirar_bolha(int size[5], int bolha, float dl, int random, float *angle)
 {
-	int x, y;
+	int x, y, xm, ym, xt1, yt1, xt2, yt2;
+	int x0 = size[0] / 2;
+	int y0 = size[1] - (0.5 * bolha * (1 + dl));
+	int atirar = 0;
 	int color[9][3] =  {{255, 0, 0},		/* vermelho */
 					{128, 0, 128},		/* roxo */
 					{0, 0, 255},		/* azul */
@@ -276,11 +288,35 @@ void atirar_bolha(int size[5], int bolha, int random)
 					{128, 0, 0},		/* castanho */
 					{0, 0, 0},		/* preto */
 					{255, 255, 255}};	/* branco */
+	SDL_Event event;
 
-	// current bolha
-	x = size[0]) / 2;						/* size_x / 2 		*/
-	y = size[1] - (0.5 * bolha * (1 + dl));		/* size_y - bolha/2 */
-	filledCircleRGBA(g_pRenderer, x, y, bolha/2, color[random][0], color[random][1], color[random][2], 255);
+	while (atirar != 1) {
+		SDL_WaitEvent(&event);
+		SDL_GetMouseState(&xm, &ym);
+		*angle = atan2(xm-x0, ym-y0);
+		switch (event.type) {
+			case (SDL_MOUSEMOTION) :
+				if (*angle <= 0) {
+					lineRGBA(g_pRenderer, x0, y0, x, y, 220, 220, 220, 255);
+					filledCircleRGBA(g_pRenderer, x0, y0, bolha/2, color[random][0], color[random][1], color[random][2], 255);
+					x = cos(*angle) * 2 * bolha + x0;
+					y = sin(*angle) * 2 * bolha + y0;
+					lineRGBA(g_pRenderer, x0, y0, x, y, 0, 0, 0, 255);
+					xt1 = (x - 0.5 * bolha) * cos(*angle) - (y + 0.5 * bolha) * sin(*angle);
+					yt1 = (x - 0.5 * bolha) * sin(*angle) + (y + 0.5 * bolha) * cos(*angle);
+					xt2 = (x - 0.5 * bolha) * cos(*angle) - (y - 0.5 * bolha) * sin(*angle);
+					yt2 = (x - 0.5 * bolha) * sin(*angle) + (y - 0.5 * bolha) * cos(*angle);
+					//filledTrigonRGBA(g_pRenderer, x, y, xt1, yt1, xt2, yt2, 0, 0, 0, 255);
+					SDL_RenderPresent(g_pRenderer);
+					SDL_Delay(50);
+				}
+				break;
+			case (SDL_MOUSEBUTTONDOWN) :
+				atirar = 1;
+				break;
+		}
+	}
+	
 	
 	return;
 }
