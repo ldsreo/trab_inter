@@ -11,4 +11,4 @@
 6
 
 // Geração de uma nova linha de bolhas ao fim de N jogadas
-10
+5

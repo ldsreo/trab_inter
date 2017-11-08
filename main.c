@@ -16,16 +16,18 @@
 
 void configurar(int configs[6], float *pdl);
 void salvar(int pts);
-void nova_janela(int configs[6], int size[5], float dl);
+void nova_janela(int configs[6], int size[6], float dl);
 void desenhar_campo(int configs[6], float dl, int offset_top, int size_campo_y, int campo[][1500][3]);
-void desenhar_hud(int size[5], int bolha, float dl, int random[2]);
+void desenhar_hud(int size[6], int bolha, float dl, int random[2]);
 void desenhar_menu(int *size_x, int pts);
-void atirar_bolha(int size[5], int bolha, float dl, int random, float *angle);
-int mover_bolha(int size[5], float bolha[4], float dl, float angle, int campo[][1500][3]);
-int verificar_colisao(int size[5], float bolha[4], float dl, int campo[][1500][3], int *pop);
-int pop_bolhas(float bolha[4], float dl, int campo[][1500][3], int direcao, int offset_top);
-void colar_bolha(float bolha[4], float dl, int colisao, int campo[][1500][3]);
-void update_campo(int pix_x, int pix_y, int cor, int r, int campo[][1500][3]);
+int determinar_evento(int size[6], int bolha, float dl, int random, float *angle);
+int mover_bolha(int size[6], float bolha[4], float dl, float angle, int campo[][1500][3]);
+int verificar_colisao(int size[6], float bolha[4], float dl, int campo[][1500][3]);
+int pop_bolhas(float bolha[4], float dl, int campo[][1500][3], int offset_top, int cumul);
+int colar_bolha(float bolha[4], float dl, int colisao, int campo[][1500][3], int offset_top);
+void update_campo(int x, int y, int cor, int r, int campo[][1500][3]);
+int continuar_jogo(int size[6], int r, int campo[][1500][3]);
+int nova_linha(int size[6], int colunas, int r, float dl, int campo[][1500][3]);
 
 SDL_Window* g_pWindow = 0;
 SDL_Renderer* g_pRenderer = 0;
@@ -34,48 +36,53 @@ int main(void)
 {
 	int configs[6];									/* << ver definicao em configurar() >> */
 	float dl, angle;
-	int size[5];									/* window size {x, y, campo_y, offset_top, offset_bottom}*/
+	int size[6];									/* window size {x, y, campo_y, offset_top, offset_bottom}*/
 	int random_color[2] = {rand() % 9, 0};			/* atual, proxima */
 	float bolha[4];									/* info da bolha {pos_x, pos_y, raio, cor} */
-	int fim = 0, pontuacao = 0;
+	int pontuacao = 0;
 
-	// LER CONFIG.TXT
-	configurar(configs, &dl);
+	configurar(configs, &dl);						/* LER CONFIG.TXT */
+	nova_janela(configs, size, dl);					/* CRIAR JANELA C/ SDL */
 
-	// CRIAR JANELA C/ SDL
-	nova_janela(configs, size, dl);
-
-	int campo_bolha[size[2]][1500][3];				/* usar 'char' p/ ocupar menos memoria */
-	//memset(campo_bolha, -1, size[2]*1500*3*sizeof(char));
+	int campo_bolha[size[2]][1500][3];
 	for (int i = 0; i < size[2]; i++)
 		for (int j = 0; j < 1500; j++)
 			for (int k = 0; k < 3; k++)
-			campo_bolha[i][j][k] = -1;
-	
+				campo_bolha[i][j][k] = -1;
+
 	desenhar_campo(configs, dl, size[3], size[2], campo_bolha);
 	desenhar_hud(size, configs[2], dl, random_color);
 	desenhar_menu(&size[0], pontuacao);
 
 	// RODAR JOGO
-	for (int i = 0; i < 5; i++) {
-		atirar_bolha(size, configs[2], dl, random_color[0], &angle);
-		bolha[0] = size[0] / 2;									/* x0 */
-		bolha[1] = size[1] - round(configs[2] * (1 + dl) + 1);	/* y0 */
-		bolha[2] = configs[2];									/* raio */
-		bolha[3] = random_color[0];								/* cor */
-		pontuacao += mover_bolha(size, bolha, dl, angle, campo_bolha);
-		random_color[0] = random_color[1];
-		desenhar_hud(size, configs[2], dl, random_color);
-		desenhar_menu(&size[0], pontuacao);
-	}
-
-	// Fim de jogo
-
-	// Pedir nome e salvar pts em resultados.txt
-	salvar(pontuacao);
-
-	// Oferecer jogo novamente
-
+	for (int n = 1; continuar_jogo(size, configs[2]*(1+dl), campo_bolha); n++)
+		switch (determinar_evento(size, configs[2], dl, random_color[0], &angle)) {
+			case -1:
+				salvar(pontuacao);
+				return 0;
+			case -2:
+				pontuacao = 0, n = 1, random_color[0] = rand() % 9;
+				desenhar_campo(configs, dl, size[3], size[2], campo_bolha);
+				desenhar_hud(size, configs[2], dl, random_color);
+				desenhar_menu(&size[0], pontuacao);
+				break;
+			case 1:
+				bolha[0] = size[0] / 2;									/* x0 */
+				bolha[1] = size[1] - round(configs[2] * (1 + dl) + 1);	/* y0 */
+				bolha[2] = configs[2];									/* raio */
+				bolha[3] = random_color[0];								/* cor */
+				pontuacao += mover_bolha(size, bolha, dl, angle, campo_bolha);
+				random_color[0] = random_color[1];
+				desenhar_hud(size, configs[2], dl, random_color);
+				desenhar_menu(&size[0], pontuacao);
+				if (n % configs[5] == 0)
+					if (nova_linha(size, configs[0], bolha[2], dl, campo_bolha)){
+						salvar(pontuacao);
+						return 0;
+					}
+				break;
+		}
+	salvar(pontuacao);					/* PEDIR NOME E SALVAR PTS EM "resultados.txt" */
 	return 0;
 }
 
@@ -124,29 +131,31 @@ void configurar(int configs[6], float *pdl)
 
 void salvar(int pts)
 {
+	SDL_Quit();
 	char nome[16];
 
 	printf("\tNome: ");
-	scanf("%15s", &nome);
+	scanf("%15s", nome);
 
 	FILE *file_out = fopen("resultados.txt","a+");
-	fprintf(file_out, "%s: \t %d \n", nome, pts);
+	fprintf(file_out, "%10s \t %7d \n", nome, pts);
 	fclose(file_out);
 
 	return;
 }
 
-void nova_janela(int configs[6], int size[5], float dl)
+void nova_janela(int configs[6], int size[6], float dl)
 {
-	size[0] = round(configs[0] * 2 * configs[2] * (1 + dl));			/* x				*/
-	size[4] = round(2 * configs[2] * (1+dl));							/* offset_bottom 	*/ 
-	if (size[0] < 255)										/* offset_top		*/
+	size[0] = round(configs[0] * 2 * configs[2] * (1 + dl));		/* x				*/
+	size[4] = round(2 * configs[2] * (1+dl));						/* offset_bottom 	*/ 
+	if (size[0] < 255)												/* offset_top		*/
 		size[3] = 45;
 	else
 		size[3] = 25;
-	size[2] = round(configs[1] * 2 * configs[2] * (1 + dl));		/* campo_y			*/
-	size[1] = size[2] + size[3] + size[4]; 					/* y				*/
-	
+	size[2] = round((configs[1] + 1) * 2 * configs[2] * (1 + dl));	/* campo_y			*/
+	size[1] = size[2] + size[3] + size[4]; 							/* y				*/
+	size[5] = configs[4];
+
 	// initialize SDL
 	if(SDL_Init(SDL_INIT_EVERYTHING) >= 0) {
 		// if succeeded create our window
@@ -164,9 +173,8 @@ void nova_janela(int configs[6], int size[5], float dl)
 	}
 	// draw the window
 	SDL_SetRenderDrawColor(g_pRenderer, 220, 220, 220, 1);
-	// clear the window to white
+	// clear the window to beige
 	SDL_RenderClear(g_pRenderer);
-
  	// show the window
  	SDL_RenderPresent(g_pRenderer);
 
@@ -185,18 +193,19 @@ void desenhar_campo(int configs[6], float dl, int offset_top, int size_campo_y, 
 					{128, 0, 0},		/* castanho */
 					{0, 0, 0},		/* preto */
 					{255, 255, 255}};	/* branco */
-	int random;
+	int cor;
 
+	SDL_SetRenderDrawColor(g_pRenderer, 220, 220, 220, 1);
+	SDL_RenderClear(g_pRenderer);
 	for (int i = 0; i < configs[0]; i++)
-	{
 		for (int j = 0; j < configs[1]; j++)
 		{
 			x = (2*i + 1) * r;
 			y = (2*j + 1) * r;
 			if (j < configs[4])
 			{
-				random = rand() % 9;
-				filledCircleRGBA(g_pRenderer, x, y+offset_top, configs[2], color[random][0], color[random][1], color[random][2], 255);
+				cor = rand() % 9;
+				filledCircleRGBA(g_pRenderer, x, y+offset_top, configs[2], color[cor][0], color[cor][1], color[cor][2], 255);
 			}
 			for (int dx = -r; dx <= r; dx++)
 			{
@@ -204,22 +213,18 @@ void desenhar_campo(int configs[6], float dl, int offset_top, int size_campo_y, 
 				{
 					if (y+dy >= size_campo_y)
 						break;
+					campo[y+dy][x+dx][0] = -1;
 					campo[y+dy][x+dx][1] = x;					/* definir centro (x) */
 					campo[y+dy][x+dx][2] = y+offset_top;		/* definir centro (y) */
 					if ((j < configs[4]) && ((pow(dx,2) + pow(dy,2)) <= pow(r,2)))	/* se dentro da bolha */
-					{
-						campo[y+dy][x+dx][0] = random;			/* definir cor no campo */
-					}
+						campo[y+dy][x+dx][0] = cor;				/* definir cor no campo */
 				}
 			}
-
 		}
-	}
-	// show the window
  	SDL_RenderPresent(g_pRenderer);
 }
 
-void desenhar_hud(int size[5], int bolha, float dl, int random[2])
+void desenhar_hud(int size[6], int bolha, float dl, int random[2])
 {
 	int x, y, s;
 	int color[9][3] =	{{255, 0, 0},		/* vermelho */
@@ -312,12 +317,11 @@ void desenhar_menu(int *size_x, int pts)
 	return;
 }
 
-void atirar_bolha(int size[5], int bolha, float dl, int random, float *angle)
+int determinar_evento(int size[6], int bolha, float dl, int random, float *angle)
 {
 	int xl, yl, xm, ym, xt1, yt1, xt2, yt2;
 	int x0 = size[0] / 2;
 	int y0 = size[1] - (bolha * (1 + dl) + 1);
-	int atirar = 0;
 	int color[9][3] =  {{255, 0, 0},		/* vermelho */
 					{128, 0, 128},		/* roxo */
 					{0, 0, 255},		/* azul */
@@ -327,9 +331,10 @@ void atirar_bolha(int size[5], int bolha, float dl, int random, float *angle)
 					{128, 0, 0},		/* castanho */
 					{0, 0, 0},		/* preto */
 					{255, 255, 255}};	/* branco */
+	int evento = 0;
 	SDL_Event event;
 
-	while (atirar != 1) {
+	while (evento == 0) {
 		SDL_WaitEvent(&event);
 		SDL_GetMouseState(&xm, &ym);
 		*angle = atan2(ym-y0, xm-x0);
@@ -349,19 +354,21 @@ void atirar_bolha(int size[5], int bolha, float dl, int random, float *angle)
 				SDL_Delay(25);
 				break;
 			case (SDL_MOUSEBUTTONDOWN) :	/* atirar */
-				if (*angle < 0) {
-					lineRGBA(g_pRenderer, x0, y0, xl, yl, 220, 220, 220, 255);	/* limpar seta */
-					atirar = 1;
-				}
+				if ((xm >= 90) && (xm <= 125) && (ym >= 5) && (ym <= 20))
+					evento = -1;
+				else if ((xm >= 5) && (xm <= 85) && (ym >= 5) && (ym <= 20))
+					evento = -2;
+				else if (*angle < 0)
+					evento = 1;
 				break;
 		}
 	}
-	
-	
-	return;
+	lineRGBA(g_pRenderer, x0, y0, xl, yl, 220, 220, 220, 255);	/* limpar seta */
+	SDL_RenderPresent(g_pRenderer);
+	return evento;
 }
 
-int mover_bolha(int size[5], float bolha[4], float dl, float angle, int campo[][1500][3])
+int mover_bolha(int size[6], float bolha[4], float dl, float angle, int campo[][1500][3])
 {
 	int pix_x = (int)bolha[0];
 	int pix_y = (int)bolha[1];
@@ -376,7 +383,7 @@ int mover_bolha(int size[5], float bolha[4], float dl, float angle, int campo[][
 						{0, 0, 0},			/* preto */
 						{255, 255, 255}};	/* branco */
 	int cor = (int)bolha[3];
-	int colisao = 0, pop = 0, pts = 0;
+	int colisao = 0, pts = 0;
 
 	while (colisao == 0) {
 		filledCircleRGBA(g_pRenderer, pix_x, pix_y, raio, 220, 220, 220, 255);
@@ -384,21 +391,19 @@ int mover_bolha(int size[5], float bolha[4], float dl, float angle, int campo[][
 		bolha[1] += sin(angle);
 		pix_x = (int)bolha[0];
 		pix_y = (int)bolha[1];
-		colisao = verificar_colisao(size, bolha, dl, campo, &pop);
+		colisao = verificar_colisao(size, bolha, dl, campo);
 		filledCircleRGBA(g_pRenderer, pix_x, pix_y, raio, color[cor][0], color[cor][1], color[cor][2], 255);
 		SDL_RenderPresent(g_pRenderer);
 		SDL_Delay((int)bolha[2]/5);
 	}
 	filledCircleRGBA(g_pRenderer, pix_x, pix_y, raio, 220, 220, 220, 255);
 	SDL_RenderPresent(g_pRenderer);
-	printf("%d %d\n", campo[pix_y][pix_x][1], campo[pix_y][pix_x][2]);
 	if (colisao > 1) {
-		colar_bolha(bolha, dl, colisao, campo);
-		pix_x = bolha[0], pix_y = bolha[1];
-		if (pop != 0)
-			pts += pop_bolhas(bolha, dl, campo, colisao, size[3]);
+		if (colar_bolha(bolha, dl, colisao, campo, size[3]))
+			pts += pop_bolhas(bolha, dl, campo, size[3], 0) - 1;
 		else
 		{
+			pix_x = bolha[0], pix_y = bolha[1];
 			update_campo(pix_x, pix_y-size[3], cor, raio*(1+dl), campo);
 			filledCircleRGBA(g_pRenderer, pix_x, pix_y, bolha[2], color[cor][0], color[cor][1], color[cor][2], 255);
 		}
@@ -407,12 +412,11 @@ int mover_bolha(int size[5], float bolha[4], float dl, float angle, int campo[][
 	return pts;
 }
 
-int verificar_colisao(int size[5], float bolha[4], float dl, int campo[][1500][3], int *pop)
+int verificar_colisao(int size[6], float bolha[4], float dl, int campo[][1500][3])
 {
 	float pos_x = bolha[0];
 	float pos_y = bolha[1];
 	float raio = bolha[2];
-	char cor_bolha = (int)bolha[3];
 	int max_x = size[0];
 	int min_y = size[3];
 	int x, y;
@@ -426,8 +430,6 @@ int verificar_colisao(int size[5], float bolha[4], float dl, int campo[][1500][3
 		y = pos_y + raio*(1+dl)*sin(theta) - size[3];
 		if (y < size[2])
 		{
-			if (campo[y][x][0] == cor_bolha)
-				*pop = 1;
 			if (campo[y][x][0] != -1)
 			{									/* nova posicao da bolha: 	*/
 				if (theta > -M_PI/4.0)
@@ -443,45 +445,39 @@ int verificar_colisao(int size[5], float bolha[4], float dl, int campo[][1500][3
 	return 0;
 }
 
-int pop_bolhas(float bolha[4], float dl, int campo[][1500][3], int direcao, int offset_top)
+int pop_bolhas(float bolha[4], float dl, int campo[][1500][3], int offset_top, int cumul)
 {
 	int raio = bolha[2];
-	if (direcao == 3)
-		bolha[0] -= 2 * raio * (1+dl);
-	else if (direcao == 9)
-		bolha[0] += 2 * raio * (1+dl);
-	else if (direcao != 0)
-		bolha[1] -= 2 * raio * (1+dl);
 	int pix_x = bolha[0];
 	int pix_y = bolha[1];
 	int x, y, pts = 1;
-
+	cumul += 1;
 	filledCircleRGBA(g_pRenderer, pix_x, pix_y, raio, 220, 220, 220, 255);
 	SDL_RenderPresent(g_pRenderer);
 	SDL_Delay((int)bolha[2]/5);
 
 	update_campo(pix_x, pix_y-offset_top, -1, raio*(1+dl), campo);
 
-	for (int i = 0; i < 3; i++)
+	for (int i = -3; i < 5; i++)
 	{
-		x = pix_x + raio*(1+dl)*cos(-M_PI*i/2);
-		y = pix_y + raio*(1+dl)*sin(-M_PI*i/2) - offset_top;
+		x = pix_x + 2*raio*(1+dl)*cos(-M_PI*i/4);
+		y = pix_y + 2*raio*(1+dl)*sin(-M_PI*i/4) - offset_top;
 		if ((x > 0) && (y > 0))
 		{
 			if (campo[y][x][0] == bolha[3])
 			{
-				bolha[0] = x;
-				bolha[1] = y + offset_top;
-				pts += pop_bolhas(bolha, dl, campo, 0, offset_top);
+				bolha[0] = campo[y][x][1];
+				bolha[1] = campo[y][x][2];
+				pts += pop_bolhas(bolha, dl, campo, offset_top, cumul);
 			}
 		}
-
 	}
+
 	filledCircleRGBA(g_pRenderer, pix_x, pix_y, raio, 220, 220, 220, 255);
 	return pts;
 }
 
-void colar_bolha(float bolha[4], float dl, int colisao, int campo[][1500][3])
+int colar_bolha(float bolha[4], float dl, int colisao, int campo[][1500][3], int offset_top)
 {
 	int x = bolha[0];
 	int y = bolha[1];
@@ -492,19 +488,29 @@ void colar_bolha(float bolha[4], float dl, int colisao, int campo[][1500][3])
 		case 9:
 			bolha[0] = campo[y-r][x-r][1];
 			bolha[1] = campo[y-r][x-r][2];
-			return;
+			break;
 		case 6:
-			bolha[0] = campo[y][x][1];
-			bolha[1] = campo[y][x][2];
-			return;
+			bolha[0] = campo[y-r][x][1];
+			bolha[1] = campo[y-r][x][2];
+			break;
 		case 3:
 			bolha[0] = campo[y-r][x+r][1];
 			bolha[1] = campo[y-r][x+r][2];
-			return;
+			break;
 	}
+
+	for (int i = -3; i < 5; i++)
+	{
+		x = bolha[0] + 2*r*cos(-M_PI*i/4);
+		y = bolha[1] + 2*r*sin(-M_PI*i/4) - offset_top;
+		if ((x > 0) && (y > 0))
+			if (campo[y][x][0] == bolha[3])
+				return 1;
+	}
+	return 0;
 }
 
-void update_campo(int pix_x, int pix_y, int cor, int r, int campo[][1500][3])
+void update_campo(int x, int y, int cor, int r, int campo[][1500][3])
 {
 	for (int dx = -r; dx <= r; dx++)
 	{
@@ -512,13 +518,62 @@ void update_campo(int pix_x, int pix_y, int cor, int r, int campo[][1500][3])
 		{
 			if (cor == -1)
 			{
-				campo[pix_y+dy][pix_x+dx][0] = cor;
+				campo[y+dy][x+dx][0] = cor;
 			}
 			else if ((pow(dx,2) + pow(dy,2)) <= pow(r,2))	/* se dentro da bolha */
 			{
-				campo[pix_y+dy][pix_x+dx][0] = cor;		/* definir cor no campo */
+				campo[y+dy][x+dx][0] = cor;		/* definir cor no campo */
 			}
 		}
 	}
 	return;
+}
+
+int continuar_jogo(int size[6], int r, int campo[][1500][3])
+{
+	int soma = 0;
+	for (int i = 0; i < size[0]; i++)
+		soma += campo[size[2]-3*r][i][0];
+	if (soma == -size[0])
+		return 1;
+	else
+		return 0;
+}
+
+int nova_linha(int size[6], int colunas, int r, float dl, int campo[][1500][3])
+{
+	int x, y0, y1, cor;
+	int color[9][3] =	{{255, 0, 0},		/* vermelho */
+						{128, 0, 128},		/* roxo */
+						{0, 0, 255},		/* azul */
+						{0, 255, 255},		/* cyan */
+						{0, 128, 0},		/* verde */
+						{255, 255, 0},		/* amarelo */
+						{128, 0, 0},		/* castanho */
+						{0, 0, 0},			/* preto */
+						{255, 255, 255}};	/* branco */
+	size[5] = size[5] + 1;
+	printf("%d\n", size[5]);
+	for (int j = 0; j < colunas; j++)
+	{
+		x = (2*j + 1) * round(r*(1+dl));
+		for (int i = size[5]; i >= 0; i--)
+		{
+			y0 = (2*i - 1) * round(r*(1+dl));
+			y1 = (2*i + 1) * round(r*(1+dl));
+			if (y1 >= size[2])
+				return 1;
+			if (i != 0)
+				cor = campo[y0][x][0];
+			else
+				cor = rand() % 9;
+			filledCircleRGBA(g_pRenderer, campo[y1][x][1], campo[y1][x][2], r, 220, 220, 220, 255);
+			if (cor != -1)
+				filledCircleRGBA(g_pRenderer, campo[y1][x][1], campo[y1][x][2], r, color[cor][0], color[cor][1], color[cor][2], 255);
+			update_campo(campo[y1][x][1], campo[y1][x][2]-size[3], cor, round(r*(1+dl)), campo);
+		}
+
+	}
+	SDL_RenderPresent(g_pRenderer);
+	return 0;
 }
